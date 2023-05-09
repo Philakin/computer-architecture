@@ -1,0 +1,57 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity Floating_Point_Adder is
+    Port ( A : in STD_LOGIC_VECTOR (31 downto 0);
+           B : in STD_LOGIC_VECTOR (31 downto 0);
+           clk : in STD_LOGIC;
+           sum : out STD_LOGIC_VECTOR (31 downto 0));
+end Floating_Point_Adder;
+
+architecture Behavioral of Floating_Point_Adder is
+
+    type ST is (WAIT_STATE, ALIGN_STATE, ADDITION_STATE, NORMALIZE_STATE, OUTPUT_STATE);
+    signal state : ST := WAIT_STATE;
+    
+    signal A_mantissa, B_mantissa, sum_mantissa : signed(23 downto 0);
+    signal A_exp, B_exp, sum_exp : unsigned(7 downto 0);
+    signal A_sgn, B_sgn, sum_sgn : STD_LOGIC;
+
+begin
+
+    Control_Unit : process(clk)
+        variable diff : signed(7 downto 0);
+    begin
+        if rising_edge(clk) then
+            case state is
+                when WAIT_STATE =>
+                    A_sgn <= A(31);
+                    A_exp <= unsigned(A(30 downto 23));
+                    A_mantissa <= signed("00" & A(22 downto 0));
+                    B_sgn <= B(31);
+                    B_exp <= unsigned(B(30 downto 23));
+                    B_mantissa <= signed("00" & B(22 downto 0));
+                    state <= ALIGN_STATE;
+                    
+                when ALIGN_STATE =>
+                    diff := signed(A_exp) - signed(B_exp);
+                    if diff > 0 then -- A has bigger exponent, so shift B
+                        B_exp <= unsigned(signed(B_exp) + diff);
+                        B_mantissa <= resize(B_mantissa, B_mantissa'high + 1) & '0';
+                    elsif diff < 0 then -- B has bigger exponent, so shift A
+                        A_exp <= unsigned(signed(A_exp) - diff);
+                        A_mantissa <= resize(A_mantissa, A_mantissa'high + 1) & '0';
+                    end if;
+                    state <= ADDITION_STATE;
+                    
+                when ADDITION_STATE =>
+                    sum_sgn <= A_sgn xor B_sgn;
+                    if A_exp = B_exp then -- Add or subtract mantissas
+                        if A_sgn = B_sgn then
+                            sum_mantissa <= A_mantissa + B_mantissa;
+                        else
+                            sum_mantissa <= A_mantissa - B_mantissa;
+                        end if;
+                    else -- Normalize and add or subtract
+                        sum_mantissa <= shift_right(A_m
